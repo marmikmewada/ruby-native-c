@@ -6,37 +6,73 @@ const useStore = create((set) => ({
   userId: null,
   token: null,
   todos: [],
+  loading: true, // Add loading state
 
-  login: async (username, password) => {
+  initialize: async () => {
     try {
-      const response = await fetch('http://192.168.1.102:5000/api/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username, password }),
-      });
-  
-      const data = await response.json();
-  
-      if (!response.ok) {
-        console.error('Login failed:', response.status, data.error || 'Unknown error');
-        throw new Error(data.error || 'Login failed');
+      const token = await AsyncStorage.getItem('token');
+      if (token) {
+        // Optionally, verify token validity by making a request to the backend
+        const response = await fetch('http://192.168.1.102:5000/api/verifyToken', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          set({ isLoggedIn: true, userId: data.userId, token });
+        } else {
+          await AsyncStorage.removeItem('token');
+          set({ isLoggedIn: false, userId: null, token: null });
+        }
+      } else {
+        set({ loading: false }); // Set loading to false if no token is found
       }
-  
-      await AsyncStorage.setItem('token', data.token);
-      set({ isLoggedIn: true, userId: data.userId, token: data.token });
     } catch (error) {
-      console.error('Login failed:', error.message);
-      throw error;
+      console.error('Initialization failed:', error.message);
+      set({ loading: false }); // Ensure loading state is set to false on error
+    } finally {
+      set({ loading: false }); // Ensure loading state is set to false after initialization attempt
     }
   },
-  
-  
 
+  // Login function
+  // Login function
+login: async (username, password) => {
+  try {
+    const response = await fetch('http://192.168.1.102:5000/api/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ username, password }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('Login failed:', response.status, data.error || 'Unknown error');
+      throw new Error(data.error || 'Login failed');
+    }
+    console.log(data.token);
+    await AsyncStorage.setItem('token', data.token);
+    
+    // Fetch the token from AsyncStorage and log it
+    const savedToken = await AsyncStorage.getItem('token');
+    console.log('Token saved in AsyncStorage:', savedToken);
+
+    set({ isLoggedIn: true, userId: data.userId, token: data.token }); // Update token in Zustand
+  } catch (error) {
+    console.error('Login failed:', error.message);
+    throw error;
+  }
+},
+
+
+  // Logout function
   logout: async () => {
     try {
-      await AsyncStorage.removeItem('token'); // Remove token from storage on logout
+      await AsyncStorage.removeItem('token');
       set({ isLoggedIn: false, userId: null, token: null });
     } catch (error) {
       console.error('Logout failed:', error.message);
@@ -44,6 +80,7 @@ const useStore = create((set) => ({
     }
   },
 
+  // Signup function
   signup: async (username, password) => {
     try {
       const response = await fetch('http://192.168.1.102:5000/api/signup', {
@@ -59,15 +96,14 @@ const useStore = create((set) => ({
         throw new Error(data.error || 'Signup failed');
       }
 
-      // Signup successful, proceed with successful signup action
       return { success: true };
     } catch (error) {
       console.error('Signup failed:', error.message);
       throw error;
     }
   },
-  
 
+  // Add Todo function
   addTodo: async (newTodo) => {
     try {
       const token = useStore.getState().token;
@@ -75,7 +111,7 @@ const useStore = create((set) => ({
         throw new Error('Token not found');
       }
 
-      const response = await fetch('http://192.168.1.102:5000/todos', {
+      const response = await fetch('http://192.168.1.102:5000/api/todos', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -96,6 +132,7 @@ const useStore = create((set) => ({
     }
   },
 
+  // Update Todo function
   updateTodo: async (updatedTodo) => {
     try {
       const token = useStore.getState().token;
@@ -103,7 +140,7 @@ const useStore = create((set) => ({
         throw new Error('Token not found');
       }
 
-      const response = await fetch(`http://192.168.1.102:5000/todos/${updatedTodo.id}`, {
+      const response = await fetch(`http://192.168.1.102:5000/api/todos/${updatedTodo.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -126,6 +163,7 @@ const useStore = create((set) => ({
     }
   },
 
+  // Delete Todo function
   deleteTodo: async (todoId) => {
     try {
       const token = useStore.getState().token;
@@ -133,7 +171,7 @@ const useStore = create((set) => ({
         throw new Error('Token not found');
       }
 
-      const response = await fetch(`http://192.168.1.102:5000/todos/${todoId}`, {
+      const response = await fetch(`http://192.168.1.102:5000/api/todos/${todoId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -154,14 +192,15 @@ const useStore = create((set) => ({
     }
   },
 
-  getAllTodos: async (userId) => {
+  // Get All Todos function
+  getAllTodos: async () => {
     try {
-      const token = useStore.getState().token;
+      const token = await AsyncStorage.getItem('token');
       if (!token) {
         throw new Error('Token not found');
       }
 
-      const response = await fetch(`http://192.168.1.102:5000/todos?userId=${userId}`, {
+      const response = await fetch('http://192.168.1.102:5000/api/todos', {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -169,15 +208,20 @@ const useStore = create((set) => ({
 
       const data = await response.json();
       if (response.ok) {
-        set({ todos: data });
+        set((state) => ({
+          todos: data || state.todos, // Update todos with fetched data or keep existing state
+        }));
       } else {
         throw new Error(data.error || 'Failed to fetch todos');
       }
     } catch (error) {
       console.error('Error fetching todos:', error.message);
-      throw error;
+      throw error; // Rethrow error to propagate to the caller
     }
   },
 }));
+
+// Call initialize function to set initial state based on stored token
+useStore.getState().initialize();
 
 export default useStore;

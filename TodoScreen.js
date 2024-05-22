@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, Button, FlatList, TextInput, Modal, TouchableOp
 import useStore from './store'; // Adjust path as necessary
 
 const TodoScreen = () => {
-  const { todos, getAllTodos, addTodo, updateTodo, deleteTodo, token } = useStore();
+  const { todos, getAllTodos, addTodo, updateTodo, deleteTodo } = useStore();
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editTodoId, setEditTodoId] = useState(null);
@@ -16,11 +16,15 @@ const TodoScreen = () => {
   }, []);
 
   const handleAddTodo = async () => {
+    if (!newTodoTitle || !newTodoDescription) {
+      alert("Title and Description cannot be empty");
+      return;
+    }
     try {
       await addTodo({
         title: newTodoTitle,
         description: newTodoDescription,
-      }, token);
+      });
       setNewTodoTitle('');
       setNewTodoDescription('');
       setShowAddModal(false);
@@ -35,7 +39,7 @@ const TodoScreen = () => {
         id: editTodoId,
         title: newTodoTitle,
         description: newTodoDescription,
-      }, token);
+      });
       setNewTodoTitle('');
       setNewTodoDescription('');
       setShowEditModal(false);
@@ -46,7 +50,7 @@ const TodoScreen = () => {
 
   const handleDeleteTodo = async (todoId) => {
     try {
-      await deleteTodo(todoId, token);
+      await deleteTodo(todoId);
     } catch (error) {
       console.error('Failed to delete todo:', error.message);
     }
@@ -81,7 +85,7 @@ const TodoScreen = () => {
       <FlatList
         data={todos}
         renderItem={renderTodoItem}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item) => item._id.toString()}
         style={styles.todoList}
       />
 
